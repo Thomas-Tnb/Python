@@ -21,30 +21,44 @@ email = st.sidebar.text_input("Email")
 senha = st.sidebar.text_input("Senha", type="password")
 
 if st.sidebar.button("Entrar"):
-    res = supabase.auth.sign_in_with_password({"email": email, "password": senha})
-    if res.get("error"):
-        st.sidebar.error("Credenciais inválidas")
-    else:
-        st.session_state["user"] = res.user.id  # Agora salvamos o ID do usuário
+    # Buscar usuário no banco
+    res = supabase.table("usuario").select("id, email").eq("email", email).execute()
+
+    if res.data and len(res.data) > 0:
+        user = res.data[0]
+        st.session_state["user_id"] = user["id"]  # Armazena o ID do usuário logado
         st.sidebar.success("Login realizado!")
-        st.experimental_rerun()
+        st.rerun()
+    else:
+        st.sidebar.error("Usuário não encontrado ou senha incorreta.")
 
 # 🚀 Verifica se o usuário está logado
-if "user" not in st.session_state:
+if "user_id" not in st.session_state:
     st.warning("Por favor, faça login para acessar suas atividades.")
     st.stop()
 
-user_email = st.session_state["user"]
+user_id = st.session_state["user_id"]
 
-# 🗃️ Carregar atividades do banco
+# 🗃️ Carregar atividades do usuário logado
 @st.cache_data
-def load_activities():
-    response = supabase.table("atividades").select("*").execute()
+def load_activities(user_id):
+    response = supabase.table("atividades").select("*").eq("usuario_id", user_id).execute()
     if response.data:
-        return pd.DataFrame(response.data)
-    return pd.DataFrame(columns=["id", "Matéria", "Atividade", "Situação", "Prazo", "Prioridade"])
+        df = pd.DataFrame(response.data)
 
-df = load_activities()
+        # ✅ Corrigir nomes das colunas para manter padrão no código
+        df.rename(columns={
+            "matéria": "Matéria",
+            "atividade": "Atividade",
+            "situação": "Situação",
+            "prazo": "Prazo",
+            "prioridade": "Prioridade"
+        }, inplace=True)
+
+        return df
+    return pd.DataFrame(columns=["id", "Matéria", "Atividade", "Situação", "Prazo", "Prioridade"])  
+
+df = load_activities(user_id)
 
 st.title("📚 Gerenciador de Atividades - Faculdade")
 
@@ -58,16 +72,16 @@ priority = st.sidebar.selectbox("Prioridade", ["Alta", "Média", "Baixa"])
 
 if st.sidebar.button("Adicionar"):
     new_data = {
-        "usuario_id": st.session_state["user"],  # Salvar o ID do usuário
-        "Matéria": subject,
-        "Atividade": activity,
-        "Situação": status,
-        "Prazo": str(deadline),
-        "Prioridade": priority
+        "usuario_id": user_id,  # Salvar o ID do usuário logado
+        "matéria": subject,
+        "atividade": activity,
+        "situação": status,
+        "prazo": str(deadline),
+        "prioridade": priority
     }
     supabase.table("atividades").insert(new_data).execute()
     st.sidebar.success("Atividade adicionada!")
-    st.experimental_rerun()
+    st.rerun()
 
 # 📋 Exibir Atividades
 st.subheader("📌 Atividades Pendentes")
@@ -75,7 +89,7 @@ def apply_style(val):
     return f'background-color: {PRIORITY_COLORS.get(val, "white")}; color: white; font-weight: bold;'
 
 if not df.empty:
-    st.dataframe(df.style.applymap(apply_style, subset=['Prioridade']))
+    st.dataframe(df.style.applymap(apply_style, subset=["Prioridade"]))
 else:
     st.info("Nenhuma atividade cadastrada.")
 
@@ -86,7 +100,7 @@ if not df.empty:
     if st.sidebar.button("Remover"):
         supabase.table("atividades").delete().eq("id", remove_id).execute()
         st.sidebar.success("Atividade removida!")
-        st.experimental_rerun()
+        st.rerun()
 
 # 📅 Visualização no Calendário
 st.subheader("📅 Visualização no Calendário")
