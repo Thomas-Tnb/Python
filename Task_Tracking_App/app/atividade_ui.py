@@ -18,7 +18,7 @@ def display_activities(user_id):
 
     st.subheader("📌 Atividades Pendentes")
     if not df.empty:
-        st.dataframe(df.style.applymap(apply_style, subset=["Prioridade"]))
+        st.dataframe(df.style.applymap(apply_style, subset=["Prioridade"]), use_container_width=True)
     else:
         st.info("Nenhuma atividade cadastrada.")
 
@@ -42,7 +42,7 @@ def remove_activity_ui(user_id):
     df = Atividade.carregar_por_usuario(user_id)
     st.sidebar.subheader("🗑️ Remover Atividade")
 
-    response = supabase.table("atividades").select("atividade").execute()
+    response = supabase.table("atividades").select("atividade").eq("usuario_id", user_id).execute()
     atividades = [atividade['atividade'] for atividade in response.data]
 
     if not df.empty:
@@ -76,34 +76,69 @@ def calendar_view(user_id):
     # Criar estrutura do calendário
     cal = calendar.monthcalendar(selected_year, selected_month)
     days_labels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-    
+
     fig = go.Figure()
 
+    # Adicionar grade no calendário
     for week_idx, week in enumerate(cal):
         for day_idx, day in enumerate(week):
             if day == 0:
-                continue  # Dia vazio
+                continue  # Ignorar espaços vazios
 
             atividades_do_dia = df[df["Prazo"].dt.day == day]
-            atividades_texto = "<br>".join(atividades_do_dia["Atividade"]) if not atividades_do_dia.empty else ""
+
+            atividades_texto = ""
+            for _, atividade in atividades_do_dia.iterrows():
+                cor = PRIORITY_COLORS.get(atividade["Prioridade"], "white")
+                atividades_texto += f'<span style="color:{cor};"><b>{atividade["Atividade"]}</b></span><br>'
 
             fig.add_trace(go.Scatter(
-                x=[day_idx], y=[-week_idx], mode="text",
+                x=[day_idx], y=[-(week_idx + 1)],
+                mode="text",
                 text=f"<b>{day}</b><br>{atividades_texto}",
                 showlegend=False,
                 textposition="middle center",
-                hoverinfo="text"
+                hoverinfo="skip"
             ))
+
+            # Criar a grade desenhando quadrados para os dias
+            fig.add_shape(
+                type="rect",
+                x0=day_idx - 0.5, x1=day_idx + 0.5,
+                y0=-(week_idx + 1) - 0.5, y1=-(week_idx + 1) + 0.5,
+                line=dict(color="white", width=1)
+            )
+
+    # Adiciona os nomes dos dias da semana no topo
+    for day_idx, day_label in enumerate(days_labels):
+        fig.add_trace(go.Scatter(
+            x=[day_idx], y=[0],
+            mode="text",
+            text=f"<b>{day_label}</b>",
+            showlegend=False,
+            textposition="middle center",
+            hoverinfo="skip"
+        ))
 
     fig.update_layout(
         title=f"📆 {calendar.month_name[selected_month]} {selected_year}",
-        xaxis=dict(tickmode="array", tickvals=list(range(7)), ticktext=days_labels, showgrid=False),
-        yaxis=dict(showgrid=False, showticklabels=False),
-        plot_bgcolor="#0e1117",  # Cor de fundo do gráfico
-        paper_bgcolor="#0e1117",  # Cor de fundo geral do gráfico
+        xaxis=dict(
+            tickmode="array",
+            tickvals=list(range(7)),
+            ticktext=[],  # Remove os textos duplicados no eixo X
+            showgrid=False,  # Remove as grades do fundo
+            zeroline=False
+        ),
+        yaxis=dict(
+            showgrid=False,  # Remove as grades no eixo Y
+            showticklabels=False,
+            zeroline=False
+        ),
+        plot_bgcolor="#0e1117",  # Fundo do calendário
+        paper_bgcolor="#0e1117",  # Fundo geral do gráfico
         margin=dict(l=20, r=20, t=50, b=20),
         height=400,
-        font=dict(color="white")  # Cor da fonte em branco
+        font=dict(color="white")  # Texto em branco para melhor contraste
     )
 
     st.plotly_chart(fig, use_container_width=True)
