@@ -1,0 +1,9 @@
+Mais simples 
+1 - Mudar formato de data para pt-br
+2 - Remover primeira coluna do dataframe
+3 - Adicionar mensagem de bem vindo na sidebar com o nome do usuário
+
+Mais Complexos
+1 - Adicionar feature "Editar tarefas" direto no visual tabular
+2 - Subir no docker (por conta das bibliotecas e da versão do Python)
+3 - Adicionar API do chatgpt para criar uma rotina de estudos para realizar as atividades de forma organizada
